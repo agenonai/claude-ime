@@ -55,7 +55,7 @@ use crate::version::VERSION;
 pub struct Cli {
     /// Print version information and exit.
     #[arg(short = 'v', long = "version", action = clap::ArgAction::Version, help = "Print version information")]
-    version: bool,
+    _version: Option<bool>,
 
     /// Enable debug-level logging.
     ///
