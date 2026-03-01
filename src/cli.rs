@@ -36,6 +36,7 @@ use crate::version::VERSION;
 #[command(
     name = "claude-ime",
     version = VERSION,
+    disable_version_flag = true,
     about = "Fix IME / multi-byte input for Claude Code (Vietnamese, CJK, and more)",
     long_about = concat!(
         "claude-ime wraps Claude Code (or any command) in a managed PTY and \n",
@@ -52,12 +53,20 @@ use crate::version::VERSION;
     after_help = "Project home: https://github.com/agenon/claude-ime",
 )]
 pub struct Cli {
+    /// Print version information and exit.
+    #[arg(short = 'v', long = "version", action = clap::ArgAction::Version, help = "Print version information")]
+    version: bool,
+
     /// Enable debug-level logging.
     ///
     /// When set, claude-ime prints PTY events, byte counts, and UTF-8
     /// boundary decisions to stderr.  This is useful when diagnosing
     /// garbled-character issues.
-    #[arg(short, long, help = "Enable debug logging (PTY events, byte counts)")]
+    #[arg(
+        short = 'd',
+        long,
+        help = "Enable debug logging (PTY events, byte counts)"
+    )]
     pub verbose: bool,
 
     /// Explicit path to the `claude` binary.
@@ -88,7 +97,7 @@ pub struct Cli {
     ///
     /// Separate claude-ime flags from forwarded arguments with `--`:
     ///
-    ///     claude-ime --verbose -- --resume --model sonnet
+    ///     claude-ime -d -- --resume --model sonnet
     #[arg(
         trailing_var_arg = true,
         allow_hyphen_values = true,
