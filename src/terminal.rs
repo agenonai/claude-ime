@@ -87,6 +87,19 @@ pub fn set_raw_mode() -> Result<TerminalState> {
     let mut raw = saved.termios.clone();
     termios::cfmakeraw(&mut raw);
 
+    // Restore ICRNL: map CR→NL in the outer terminal's line discipline.
+    // Required so that GoTiengViet's composition around the Enter key
+    // works correctly — without it, raw CR bytes bypass the inner PTY's
+    // line handling.
+    raw.input_flags.insert(termios::InputFlags::ICRNL);
+
+    // Set IUTF8 (macOS/Linux): tells the kernel line discipline to treat
+    // VERASE (backspace) as erasing a full UTF-8 code point rather than a
+    // single byte.  Without this, GoTiengViet's backspace injection may
+    // leave dangling UTF-8 continuation bytes.
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    raw.input_flags.insert(termios::InputFlags::IUTF8);
+
     termios::tcsetattr(stdin_fd(), SetArg::TCSAFLUSH, &raw)
         .map_err(|e| std::io::Error::from_raw_os_error(e as i32))?;
 

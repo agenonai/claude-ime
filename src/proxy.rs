@@ -3,8 +3,10 @@
 /// Two OS threads move bytes in opposite directions:
 ///
 /// - **stdin → PTY** (thread 1): reads from [`std::io::Stdin`] and writes
-///   to the PTY master writer.  This direction is straightforward — we pass
-///   bytes through as-is so that every keystroke reaches the child process.
+///   to the PTY master writer.  Like the output direction, incomplete UTF-8
+///   sequences at read boundaries are buffered until the next read completes
+///   them.  This prevents IMEs like GoTiengViet from injecting partial
+///   multi-byte characters into the child process.
 ///
 /// - **PTY → stdout** (thread 2): reads from the PTY master reader, locates
 ///   safe UTF-8 boundaries using [`crate::utf8::find_safe_boundary`], and
@@ -90,6 +92,12 @@ pub fn run(
     };
 
     // ── Thread 1: stdin → PTY writer ────────────────────────────────────────
+    //
+    // GoTiengViet (and similar CGEvent-tap IMEs) inject composed UTF-8
+    // bytes that may arrive split across multiple `read()` calls when
+    // the outer terminal is in raw mode (VMIN=1, VTIME=0).  We buffer
+    // incomplete trailing sequences — mirroring the PTY→stdout thread —
+    // so the child process always receives complete code points.
     let stdin_thread = {
         let mut writer = pty_writer;
         thread::Builder::new()
@@ -98,16 +106,59 @@ pub fn run(
                 let stdin = std::io::stdin();
                 let mut stdin = stdin.lock();
                 let mut buf = [0u8; BUF_SIZE];
+                let mut pending: Vec<u8> = Vec::with_capacity(REMAINDER_CAP);
+
                 loop {
                     let n = match stdin.read(&mut buf) {
                         Ok(0) => break, // EOF
                         Ok(n) => n,
                         Err(_) => break,
                     };
-                    if writer.write_all(&buf[..n]).is_err() {
+
+                    // Fast path: no pending bytes and entire read is complete UTF-8.
+                    if pending.is_empty() {
+                        let safe = utf8::find_safe_boundary(&buf, n);
+                        if safe == n {
+                            if writer.write_all(&buf[..n]).is_err() {
+                                break;
+                            }
+                            continue;
+                        }
+                        if safe > 0 && writer.write_all(&buf[..safe]).is_err() {
+                            break;
+                        }
+                        pending.extend_from_slice(&buf[safe..n]);
+                        log::debug!("stdin: buffering {} incomplete byte(s)", pending.len());
+                        continue;
+                    }
+
+                    // Slow path: combine pending + new bytes, forward complete prefix.
+                    pending.extend_from_slice(&buf[..n]);
+                    let safe = utf8::find_safe_boundary(&pending, pending.len());
+                    if safe > 0 && writer.write_all(&pending[..safe]).is_err() {
                         break;
                     }
+                    pending.drain(..safe);
+
+                    // Safety valve: if pending grows beyond 4 bytes, flush anyway
+                    // (no valid UTF-8 code point exceeds 4 bytes).
+                    if pending.len() > 4 {
+                        log::debug!(
+                            "stdin: flushing oversized pending ({} bytes)",
+                            pending.len()
+                        );
+                        if writer.write_all(&pending).is_err() {
+                            break;
+                        }
+                        pending.clear();
+                    }
                 }
+
+                // Flush any tail bytes on EOF.
+                if !pending.is_empty() {
+                    let _ = writer.write_all(&pending);
+                }
+
                 log::debug!("stdin→PTY thread exiting");
             })
             .map_err(crate::error::ClaudeImeError::Io)?

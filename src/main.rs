@@ -44,7 +44,21 @@ fn run(cli: Cli) -> Result<i32> {
 
     // Load configuration and merge with CLI flags.
     let file_cfg = config::load()?;
-    let resolved = config::merge(file_cfg, cli.claude_path, cli.verbose);
+    let mut resolved = config::merge(file_cfg, cli.claude_path, cli.verbose);
+
+    // Ensure a UTF-8 locale is set so the child process accepts non-ASCII
+    // input.  GoTiengViet injects raw UTF-8 bytes; if the child's locale is
+    // "C" or "POSIX", libc may reject them.
+    if std::env::var_os("LANG").is_none() && !resolved.extra_env.contains_key("LANG") {
+        resolved
+            .extra_env
+            .insert("LANG".to_string(), "en_US.UTF-8".to_string());
+    }
+    if std::env::var_os("LC_CTYPE").is_none() && !resolved.extra_env.contains_key("LC_CTYPE") {
+        resolved
+            .extra_env
+            .insert("LC_CTYPE".to_string(), "en_US.UTF-8".to_string());
+    }
 
     // Determine the command to run.
     let command = resolve_command(&resolved, &cli.wrap)?;
