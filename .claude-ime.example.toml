@@ -1,0 +1,13 @@
+# claude-ime configuration
+# Copy this file to ~/.config/claude-ime/config.toml
+
+# Path to the claude binary (auto-detected if not set)
+# claude_path = "/usr/local/bin/claude"
+
+# Enable verbose logging (same as --verbose flag)
+# verbose = false
+
+# Extra environment variables to pass to the wrapped command
+# [extra_env]
+# LANG = "en_US.UTF-8"
+# LC_ALL = "en_US.UTF-8"

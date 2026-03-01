@@ -1,0 +1,21 @@
+{
+  "name": "@agenon/claude-ime",
+  "version": "0.1.0",
+  "description": "Fix IME input for Claude Code — type Vietnamese, Chinese, Japanese, Korean, and more",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/agenon/claude-ime"
+  },
+  "homepage": "https://github.com/agenon/claude-ime",
+  "keywords": ["claude", "ime", "unicode", "vietnamese", "terminal", "pty"],
+  "bin": {
+    "claude-ime": "bin/claude-ime.js"
+  },
+  "os": ["darwin", "linux", "win32"],
+  "cpu": ["x64", "arm64"],
+  "engines": {
+    "node": ">=16"
+  },
+  "files": ["bin/"]
+}
