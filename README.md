@@ -46,7 +46,7 @@ Download a precompiled binary from [GitHub Releases](https://github.com/agenon/c
 
 ```bash
 # Example: macOS ARM64
-curl -L https://github.com/agenon/claude-ime/releases/download/v0.2.0/claude-ime-aarch64-apple-darwin.tar.gz | tar xz -C /usr/local/bin
+curl -L https://github.com/agenon/claude-ime/releases/download/v0.2.1/claude-ime-aarch64-apple-darwin.tar.gz | tar xz -C /usr/local/bin
 chmod +x /usr/local/bin/claude-ime
 ```
 
