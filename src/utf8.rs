@@ -48,74 +48,12 @@
 /// Panics if `len > buf.len()`.
 pub fn find_safe_boundary(buf: &[u8], len: usize) -> usize {
     assert!(len <= buf.len(), "len ({len}) > buf.len() ({})", buf.len());
-
     if len == 0 {
         return 0;
     }
-
-    // Walk backwards to find the start of any incomplete trailing sequence.
-    // We need to look back at most 3 bytes (a 4-byte sequence can be split
-    // with up to 3 continuation bytes left to read).
-    let look_back = len.min(4);
-
-    for i in (len - look_back..len).rev() {
-        let b = buf[i];
-
-        if is_continuation_byte(b) {
-            // Keep walking — the leading byte is further left.
-            continue;
-        }
-
-        // `b` is either an ASCII byte (0xxxxxxx) or a leading byte of a
-        // multi-byte sequence (11xxxxxx).
-        let seq_len = utf8_seq_len(b);
-
-        if seq_len == 1 {
-            // ASCII — every byte through `len - 1` is complete.
-            return len;
-        }
-
-        // How many bytes of this sequence are present in the buffer?
-        let present = len - i;
-        if present >= seq_len {
-            // The sequence is complete; all bytes through `len - 1` are safe.
-            return len;
-        } else {
-            // Incomplete sequence — the safe boundary is just before `i`.
-            return i;
-        }
-    }
-
-    // All bytes in the look-back window were continuation bytes.  This
-    // can only happen if the entire window is the tail of a sequence whose
-    // leading byte lies before the window — a degenerate case for very long
-    // sequences that do not exist in valid UTF-8.  Return 0 to be safe.
-    0
-}
-
-// ---------------------------------------------------------------------------
-// Private helpers
-// ---------------------------------------------------------------------------
-
-/// Return `true` if `b` is a UTF-8 continuation byte (`10xxxxxx`).
-#[inline]
-fn is_continuation_byte(b: u8) -> bool {
-    // Continuation bytes match the pattern 10xx_xxxx, i.e. 0x80..=0xBF.
-    (b & 0b1100_0000) == 0b1000_0000
-}
-
-/// Return the total byte length of the UTF-8 sequence whose leading byte is
-/// `b`.  Returns `1` for ASCII bytes and invalid leading bytes.
-#[inline]
-fn utf8_seq_len(b: u8) -> usize {
-    if b < 0x80 {
-        1 // ASCII
-    } else if b < 0xE0 {
-        2 // 110xxxxx
-    } else if b < 0xF0 {
-        3 // 1110xxxx
-    } else {
-        4 // 11110xxx
+    match std::str::from_utf8(&buf[..len]) {
+        Ok(_) => len,
+        Err(e) => e.valid_up_to(),
     }
 }
 
@@ -126,25 +64,6 @@ fn utf8_seq_len(b: u8) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // --- is_continuation_byte ---
-
-    #[test]
-    fn continuation_byte_detected() {
-        // 10xxxxxx range: 0x80–0xBF
-        assert!(is_continuation_byte(0x80));
-        assert!(is_continuation_byte(0xBF));
-        assert!(is_continuation_byte(0xA0));
-    }
-
-    #[test]
-    fn non_continuation_bytes_rejected() {
-        assert!(!is_continuation_byte(0x00)); // ASCII NUL
-        assert!(!is_continuation_byte(0x7F)); // ASCII DEL
-        assert!(!is_continuation_byte(0xC2)); // 2-byte leader
-        assert!(!is_continuation_byte(0xE0)); // 3-byte leader
-        assert!(!is_continuation_byte(0xF0)); // 4-byte leader
-    }
 
     // --- find_safe_boundary: empty buffer ---
 
@@ -299,5 +218,28 @@ mod tests {
         buf.push(0xE1); // leading byte of ệ (U+1EC7)
         let safe = find_safe_boundary(&buf, buf.len());
         assert_eq!(safe, 2, "boundary must be after 'Vi', before incomplete ệ");
+    }
+
+    // --- find_safe_boundary: Bug 1 regression — consecutive incomplete leaders ---
+
+    #[test]
+    fn two_consecutive_incomplete_leading_bytes() {
+        // ô-start [0xC3] + ơ-start [0xC6], no continuation bytes
+        let buf: &[u8] = &[0xC3, 0xC6];
+        assert_eq!(find_safe_boundary(buf, 2), 0);
+    }
+
+    #[test]
+    fn complete_two_byte_then_incomplete_two_byte() {
+        // ô = [0xC3, 0xB4] (complete); [0xC6] = ơ start (incomplete)
+        let buf: &[u8] = &[0xC3, 0xB4, 0xC6];
+        assert_eq!(find_safe_boundary(buf, 3), 2);
+    }
+
+    #[test]
+    fn complete_3byte_then_incomplete_2byte() {
+        // ệ = [0xE1, 0xBA, 0xB9] (complete 3-byte); [0xC6] = incomplete ơ start
+        let buf: &[u8] = &[0xE1, 0xBA, 0xB9, 0xC6];
+        assert_eq!(find_safe_boundary(buf, 4), 3);
     }
 }

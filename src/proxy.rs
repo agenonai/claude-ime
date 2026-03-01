@@ -140,6 +140,17 @@ pub fn run(
                     }
                     pending.drain(..safe);
 
+                    // If pending is now a complete UTF-8 string, forward it immediately.
+                    if !pending.is_empty() {
+                        let all_safe = utf8::find_safe_boundary(&pending, pending.len());
+                        if all_safe == pending.len() {
+                            if writer.write_all(&pending).is_err() {
+                                break;
+                            }
+                            pending.clear();
+                        }
+                    }
+
                     // Safety valve: if pending grows beyond 4 bytes, flush anyway
                     // (no valid UTF-8 code point exceeds 4 bytes).
                     if pending.len() > 4 {
