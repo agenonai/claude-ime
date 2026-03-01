@@ -3,14 +3,20 @@
 /// This module handles saving and restoring terminal attributes, switching to
 /// raw mode so the PTY wrapper can forward every byte unmodified, and querying
 /// the current window size so the child PTY can be sized to match.
-use std::os::unix::io::RawFd;
+use std::os::unix::io::{BorrowedFd, RawFd};
 
 use nix::sys::termios::{self, SetArg, Termios};
 
-use crate::error::{ClaudeImeError, Result};
+use crate::error::Result;
 
-/// The file descriptor for stdin, used for all terminal attribute calls.
-const STDIN_FD: RawFd = 0;
+/// Borrow stdin as an `AsFd`-compatible reference for nix 0.29+ termios calls.
+fn stdin_fd() -> BorrowedFd<'static> {
+    // SAFETY: fd 0 (stdin) is always open for the lifetime of the process.
+    unsafe { BorrowedFd::borrow_raw(0) }
+}
+
+/// Raw file descriptor for stdin, used for ioctl calls that need `RawFd`.
+const STDIN_RAW_FD: RawFd = 0;
 
 // ────────────────────────────────────────────────────────────
 //  winsize ioctl
@@ -41,7 +47,7 @@ pub struct TerminalState {
 /// Returns [`ClaudeImeError::Io`] if `tcgetattr` fails (e.g. stdin is not a
 /// TTY).
 pub fn save() -> Result<TerminalState> {
-    let termios = termios::tcgetattr(STDIN_FD)
+    let termios = termios::tcgetattr(stdin_fd())
         .map_err(|e| std::io::Error::from_raw_os_error(e as i32))?;
     Ok(TerminalState { termios })
 }
@@ -53,7 +59,7 @@ impl TerminalState {
     /// called from a `Drop` implementation where there is no useful way to
     /// propagate them.  If you need the error, use the free function variant.
     pub fn restore(&self) {
-        let _ = termios::tcsetattr(STDIN_FD, SetArg::TCSAFLUSH, &self.termios);
+        let _ = termios::tcsetattr(stdin_fd(), SetArg::TCSAFLUSH, &self.termios);
     }
 }
 
@@ -81,7 +87,7 @@ pub fn set_raw_mode() -> Result<TerminalState> {
     let mut raw = saved.termios.clone();
     termios::cfmakeraw(&mut raw);
 
-    termios::tcsetattr(STDIN_FD, SetArg::TCSAFLUSH, &raw)
+    termios::tcsetattr(stdin_fd(), SetArg::TCSAFLUSH, &raw)
         .map_err(|e| std::io::Error::from_raw_os_error(e as i32))?;
 
     Ok(saved)
@@ -109,7 +115,7 @@ pub fn get_size() -> Result<(u16, u16)> {
 
     // SAFETY: `ws` is a valid, stack-allocated `winsize` struct.  The ioctl
     // writes only `sizeof(winsize)` bytes through the pointer.
-    unsafe { tiocgwinsz(STDIN_FD, &mut ws) }
+    unsafe { tiocgwinsz(STDIN_RAW_FD, &mut ws) }
         .map_err(|e| std::io::Error::from_raw_os_error(e as i32))?;
 
     // Fall back to 80×24 if the kernel reports zeroes (e.g. in a pipe).
@@ -187,7 +193,3 @@ pub fn apply_size_to_fd(fd: RawFd, rows: u16, cols: u16) -> Result<()> {
     Ok(())
 }
 
-// Silence the unused import warning when the public API is used through the
-// crate root only.
-#[allow(unused_imports)]
-use crate::error::ClaudeImeError as _;

@@ -23,7 +23,7 @@
 /// 2. Child exit — [`portable_pty::Child::try_wait`] is used to detect this
 ///    without blocking.  Once the child exits its code is returned.
 use std::io::{Read, Write};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
@@ -86,7 +86,7 @@ pub fn run(
         //
         // SAFETY: We uphold the invariant by only calling `resize` from the
         // main thread.
-        Arc::new(SyncMaster { inner: master })
+        Arc::new(SyncMaster::new(master))
     };
 
     // ── Thread 1: stdin → PTY writer ────────────────────────────────────────
@@ -272,51 +272,69 @@ fn exit_status_to_code(status: &portable_pty::ExitStatus) -> i32 {
 
 /// Newtype that implements `Sync` for `Box<dyn MasterPty + Send>`.
 ///
-/// This is sound because we only call `resize` on this value from one thread
-/// (the main polling loop), so there is no actual concurrent access.
+/// Uses `UnsafeCell` for interior mutability so `take_writer` can be
+/// called through a shared reference (it is only called once, before
+/// the `Arc<SyncMaster>` is shared across threads).
 struct SyncMaster {
-    inner: Box<dyn MasterPty + Send>,
+    inner: std::cell::UnsafeCell<Box<dyn MasterPty + Send>>,
 }
 
-// SAFETY: See module-level doc comment.  `resize` is only called from the
-// main thread while reader/writer threads use their independently-cloned
-// handles, so there is no concurrent mutation.
+// SAFETY: `resize` is only called from the main thread while reader/writer
+// threads use their independently-cloned handles. `take_writer` is called
+// exactly once before the Arc is shared. No concurrent mutation occurs.
 unsafe impl Sync for SyncMaster {}
+
+impl SyncMaster {
+    fn new(master: Box<dyn MasterPty + Send>) -> Self {
+        Self {
+            inner: std::cell::UnsafeCell::new(master),
+        }
+    }
+
+    /// Get a shared reference to the inner master.
+    ///
+    /// # Safety
+    /// Caller must ensure no mutable access is happening concurrently.
+    unsafe fn inner(&self) -> &dyn MasterPty {
+        &**self.inner.get()
+    }
+
+    /// Get a mutable reference to the inner master.
+    ///
+    /// # Safety
+    /// Caller must ensure no other access (shared or mutable) is happening
+    /// concurrently. Only used for `take_writer` before the Arc is shared.
+    unsafe fn inner_mut(&self) -> &mut Box<dyn MasterPty + Send> {
+        &mut *self.inner.get()
+    }
+}
 
 impl MasterPty for SyncMaster {
     fn resize(&self, size: portable_pty::PtySize) -> anyhow::Result<()> {
-        self.inner.resize(size)
+        // SAFETY: resize is only called from the main thread.
+        unsafe { self.inner() }.resize(size)
     }
 
     fn get_size(&self) -> anyhow::Result<portable_pty::PtySize> {
-        self.inner.get_size()
+        unsafe { self.inner() }.get_size()
     }
 
     fn try_clone_reader(&self) -> anyhow::Result<Box<dyn Read + Send>> {
-        self.inner.try_clone_reader()
+        unsafe { self.inner() }.try_clone_reader()
     }
 
     fn take_writer(&self) -> anyhow::Result<Box<dyn Write + Send>> {
-        // `take_writer` is documented to be callable only once.  Delegating
-        // to the inner master here is safe because we only call it once in
-        // `run` before wrapping in Arc<SyncMaster>.
-        //
-        // Since `take_writer` takes `&mut self` on the trait but we have `&self`
-        // here, we use a raw pointer cast.  This is safe because the Arc is not
-        // shared at the point of this call.
-        // SAFETY: take_writer on the inner is only called once, before the Arc
-        // is shared, so no aliased mutation occurs.
-        #[allow(clippy::cast_ref_to_mut)]
-        let inner_mut = unsafe { &mut *(self.inner.as_ref() as *const dyn MasterPty as *mut dyn MasterPty) };
-        inner_mut.take_writer()
+        // SAFETY: take_writer is called exactly once, before the Arc is
+        // shared across threads, so no aliased access occurs.
+        unsafe { self.inner_mut() }.take_writer()
     }
 
     fn process_group_leader(&self) -> Option<i32> {
-        self.inner.process_group_leader()
+        unsafe { self.inner() }.process_group_leader()
     }
 
     #[cfg(unix)]
     fn as_raw_fd(&self) -> Option<std::os::fd::RawFd> {
-        self.inner.as_raw_fd()
+        unsafe { self.inner() }.as_raw_fd()
     }
 }

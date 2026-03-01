@@ -15,7 +15,7 @@ use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use nix::sys::signal::{self, SigHandler, Signal};
 use nix::unistd::Pid;
 
-use crate::error::{ClaudeImeError, Result};
+use crate::error::Result;
 
 // ────────────────────────────────────────────────────────────
 //  Shared state
@@ -152,7 +152,3 @@ fn forward_signal_to_child(sig: Signal) {
     }
 }
 
-// Silence the unused import warning when the public API is used through the
-// crate root only.
-#[allow(unused_imports)]
-use crate::error::ClaudeImeError as _;
