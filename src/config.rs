@@ -47,6 +47,7 @@ pub struct ResolvedConfig {
     /// Path to the claude binary, if known at this stage.
     pub claude_path: Option<PathBuf>,
     /// Whether debug logging is enabled.
+    #[allow(dead_code)]
     pub verbose: bool,
     /// Extra environment variables to inject into the child process.
     pub extra_env: HashMap<String, String>,
@@ -80,17 +81,11 @@ pub fn load() -> Result<Config> {
         return Ok(Config::default());
     }
 
-    let raw = std::fs::read_to_string(&path).map_err(|e| {
-        ClaudeImeError::Config(format!("Cannot read {}: {}", path.display(), e))
-    })?;
+    let raw = std::fs::read_to_string(&path)
+        .map_err(|e| ClaudeImeError::Config(format!("Cannot read {}: {}", path.display(), e)))?;
 
-    toml::from_str::<Config>(&raw).map_err(|e| {
-        ClaudeImeError::Config(format!(
-            "Cannot parse {}: {}",
-            path.display(),
-            e
-        ))
-    })
+    toml::from_str::<Config>(&raw)
+        .map_err(|e| ClaudeImeError::Config(format!("Cannot parse {}: {}", path.display(), e)))
 }
 
 // ---------------------------------------------------------------------------
@@ -107,11 +102,7 @@ pub fn load() -> Result<Config> {
 /// * `file`         — Values loaded from the TOML file (use [`load`]).
 /// * `cli_path`     — Value of `--claude-path`, if provided.
 /// * `cli_verbose`  — Whether `-v` / `--verbose` was passed on the CLI.
-pub fn merge(
-    file: Config,
-    cli_path: Option<PathBuf>,
-    cli_verbose: bool,
-) -> ResolvedConfig {
+pub fn merge(file: Config, cli_path: Option<PathBuf>, cli_verbose: bool) -> ResolvedConfig {
     // CLI --claude-path wins; fall back to the config-file string converted to
     // a PathBuf.
     let claude_path = cli_path.or_else(|| file.claude_path.map(PathBuf::from));
@@ -200,7 +191,10 @@ mod tests {
             extra_env: Some(env),
         };
         let resolved = merge(cfg, None, false);
-        assert_eq!(resolved.extra_env.get("FOO").map(String::as_str), Some("bar"));
+        assert_eq!(
+            resolved.extra_env.get("FOO").map(String::as_str),
+            Some("bar")
+        );
     }
 
     /// Verify that [`load`] does not panic or error on a missing file.  We
@@ -216,6 +210,9 @@ mod tests {
         // If the tester happens to have the file, this still exercises the
         // parse path, which is also fine.
         let result = load();
-        assert!(result.is_ok(), "load() must not fail on missing file: {result:?}");
+        assert!(
+            result.is_ok(),
+            "load() must not fail on missing file: {result:?}"
+        );
     }
 }

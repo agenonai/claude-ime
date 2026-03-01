@@ -153,10 +153,7 @@ pub fn run(
                     // boundary.
                     let safe = utf8::find_safe_boundary(&combined, combined.len());
 
-                    log::debug!(
-                        "UTF-8 boundary: safe={safe} / total={}",
-                        combined.len()
-                    );
+                    log::debug!("UTF-8 boundary: safe={safe} / total={}", combined.len());
 
                     if safe > 0 {
                         if stdout.write_all(&combined[..safe]).is_err() {
@@ -173,10 +170,7 @@ pub fn run(
                     // Guard against a runaway remainder (should never exceed 3
                     // bytes for any valid UTF-8 stream).
                     if remainder.len() > REMAINDER_CAP {
-                        log::debug!(
-                            "Flushing oversized remainder ({} bytes)",
-                            remainder.len()
-                        );
+                        log::debug!("Flushing oversized remainder ({} bytes)", remainder.len());
                         let _ = stdout.write_all(&remainder);
                         let _ = stdout.flush();
                         remainder.clear();
@@ -304,6 +298,7 @@ impl SyncMaster {
     /// # Safety
     /// Caller must ensure no other access (shared or mutable) is happening
     /// concurrently. Only used for `take_writer` before the Arc is shared.
+    #[allow(clippy::mut_from_ref)]
     unsafe fn inner_mut(&self) -> &mut Box<dyn MasterPty + Send> {
         &mut *self.inner.get()
     }

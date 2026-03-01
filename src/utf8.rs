@@ -1,28 +1,28 @@
-/// UTF-8 boundary detection for split PTY reads.
-///
-/// When data is read from a PTY in fixed-size chunks the read boundary may
-/// fall in the middle of a multi-byte UTF-8 sequence.  Forwarding an
-/// incomplete sequence to the terminal causes the display to show the Unicode
-/// replacement character (U+FFFD) or garbled output.
-///
-/// This module provides a safe-boundary finder: given a buffer that contains
-/// `len` freshly-read bytes, it walks backwards from the end to find the
-/// largest prefix that ends on a complete UTF-8 code-point boundary.  The
-/// trailing incomplete bytes are left in the buffer so they can be prepended
-/// to the next read.
-///
-/// # UTF-8 encoding recap
-///
-/// | Code-point range  | Byte 1     | Byte 2     | Byte 3     | Byte 4     |
-/// |-------------------|------------|------------|------------|------------|
-/// | U+0000..U+007F    | 0xxxxxxx   |            |            |            |
-/// | U+0080..U+07FF    | 110xxxxx   | 10xxxxxx   |            |            |
-/// | U+0800..U+FFFF    | 1110xxxx   | 10xxxxxx   | 10xxxxxx   |            |
-/// | U+10000..U+10FFFF | 11110xxx   | 10xxxxxx   | 10xxxxxx   | 10xxxxxx   |
-///
-/// A *continuation byte* has the bit pattern `10xxxxxx` (0x80–0xBF).
-/// A *leading byte* starts with `11xxxxxx` (0xC0 or higher, excluding
-/// continuation bytes).
+//! UTF-8 boundary detection for split PTY reads.
+//!
+//! When data is read from a PTY in fixed-size chunks the read boundary may
+//! fall in the middle of a multi-byte UTF-8 sequence.  Forwarding an
+//! incomplete sequence to the terminal causes the display to show the Unicode
+//! replacement character (U+FFFD) or garbled output.
+//!
+//! This module provides a safe-boundary finder: given a buffer that contains
+//! `len` freshly-read bytes, it walks backwards from the end to find the
+//! largest prefix that ends on a complete UTF-8 code-point boundary.  The
+//! trailing incomplete bytes are left in the buffer so they can be prepended
+//! to the next read.
+//!
+//! # UTF-8 encoding recap
+//!
+//! | Code-point range  | Byte 1     | Byte 2     | Byte 3     | Byte 4     |
+//! |-------------------|------------|------------|------------|------------|
+//! | U+0000..U+007F    | 0xxxxxxx   |            |            |            |
+//! | U+0080..U+07FF    | 110xxxxx   | 10xxxxxx   |            |            |
+//! | U+0800..U+FFFF    | 1110xxxx   | 10xxxxxx   | 10xxxxxx   |            |
+//! | U+10000..U+10FFFF | 11110xxx   | 10xxxxxx   | 10xxxxxx   | 10xxxxxx   |
+//!
+//! A *continuation byte* has the bit pattern `10xxxxxx` (0x80–0xBF).
+//! A *leading byte* starts with `11xxxxxx` (0xC0 or higher, excluding
+//! continuation bytes).
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -183,7 +183,11 @@ mod tests {
     #[test]
     fn ascii_then_complete_3byte() {
         // "xin" + "ệ" — all bytes complete
-        let buf: Vec<u8> = b"xin".iter().chain(b"\xE1\xBA\xB9".iter()).copied().collect();
+        let buf: Vec<u8> = b"xin"
+            .iter()
+            .chain(b"\xE1\xBA\xB9".iter())
+            .copied()
+            .collect();
         assert_eq!(find_safe_boundary(&buf, buf.len()), buf.len());
     }
 

@@ -47,8 +47,8 @@ pub struct TerminalState {
 /// Returns [`ClaudeImeError::Io`] if `tcgetattr` fails (e.g. stdin is not a
 /// TTY).
 pub fn save() -> Result<TerminalState> {
-    let termios = termios::tcgetattr(stdin_fd())
-        .map_err(|e| std::io::Error::from_raw_os_error(e as i32))?;
+    let termios =
+        termios::tcgetattr(stdin_fd()).map_err(|e| std::io::Error::from_raw_os_error(e as i32))?;
     Ok(TerminalState { termios })
 }
 
@@ -155,6 +155,7 @@ impl CleanupGuard {
     /// Consume the guard and restore the terminal immediately.
     ///
     /// Equivalent to dropping the guard, but makes the intent explicit.
+    #[allow(dead_code)]
     pub fn restore_now(self) {
         self.state.restore();
         // Prevent the Drop impl from restoring a second time.
@@ -176,6 +177,7 @@ impl Drop for CleanupGuard {
 ///
 /// This is a thin wrapper around the `TIOCSWINSZ` ioctl and is used by the
 /// signal handler after a `SIGWINCH` is received.
+#[allow(dead_code)]
 pub fn apply_size_to_fd(fd: RawFd, rows: u16, cols: u16) -> Result<()> {
     nix::ioctl_write_ptr_bad!(tiocswinsz, nix::libc::TIOCSWINSZ, nix::libc::winsize);
 
@@ -187,9 +189,7 @@ pub fn apply_size_to_fd(fd: RawFd, rows: u16, cols: u16) -> Result<()> {
     };
 
     // SAFETY: `ws` is valid and the ioctl only reads from it.
-    unsafe { tiocswinsz(fd, &ws) }
-        .map_err(|e| std::io::Error::from_raw_os_error(e as i32))?;
+    unsafe { tiocswinsz(fd, &ws) }.map_err(|e| std::io::Error::from_raw_os_error(e as i32))?;
 
     Ok(())
 }
-

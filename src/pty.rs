@@ -10,7 +10,7 @@
 /// 3. [`resize`] — update the PTY's advertised window size after a `SIGWINCH`.
 use std::collections::HashMap;
 
-use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, PtyPair};
+use portable_pty::{Child, CommandBuilder, MasterPty, PtyPair, PtySize};
 
 use crate::error::{ClaudeImeError, Result};
 
@@ -105,6 +105,7 @@ pub fn create(
 /// # Errors
 ///
 /// Returns [`ClaudeImeError::Pty`] if the underlying resize operation fails.
+#[allow(dead_code)]
 pub fn resize(master: &dyn MasterPty, rows: u16, cols: u16) -> Result<()> {
     let size = PtySize {
         rows,
