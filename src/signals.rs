@@ -151,4 +151,3 @@ fn forward_signal_to_child(sig: Signal) {
         let _ = signal::kill(pid, sig);
     }
 }
-

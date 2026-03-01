@@ -38,8 +38,7 @@ fn run(cli: Cli) -> Result<i32> {
     // Initialise logging — env_logger respects RUST_LOG; --verbose sets the
     // minimum level to DEBUG regardless of RUST_LOG.
     let log_level = if cli.verbose { "debug" } else { "warn" };
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(log_level))
-        .init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(log_level)).init();
 
     log::debug!("claude-ime {}", version::VERSION);
 
