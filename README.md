@@ -46,7 +46,7 @@ Download a precompiled binary from [GitHub Releases](https://github.com/agenon/c
 
 ```bash
 # Example: macOS ARM64
-curl -L https://github.com/agenon/claude-ime/releases/download/v0.1.0/claude-ime-aarch64-apple-darwin.tar.gz | tar xz -C /usr/local/bin
+curl -L https://github.com/agenon/claude-ime/releases/download/v0.2.0/claude-ime-aarch64-apple-darwin.tar.gz | tar xz -C /usr/local/bin
 chmod +x /usr/local/bin/claude-ime
 ```
 
@@ -66,13 +66,19 @@ This auto-detects the claude binary and wraps it. Now type normally in Vietnames
 claude-ime --wrap echo "Hello"
 ```
 
-### Verbose Output
+### Debug Output
 
 ```bash
-claude-ime --verbose
+claude-ime -d
 ```
 
 Shows PTY setup, IME detection, and UTF-8 boundary crossing events.
+
+### Version
+
+```bash
+claude-ime -v
+```
 
 ## How It Works
 
